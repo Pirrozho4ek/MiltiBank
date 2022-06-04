@@ -24,59 +24,14 @@ describe("Multibank", function () {
     bankToken = await BankToken.deploy();
     await bankToken.deployed();
 
-    const tx1 = await multiBank.setBankToken(bankToken.address);
-    await tx1.wait();
-    
+    const tx = await multiBank.setBankToken(bankToken.address);
+    await tx.wait();
   }
 
   async function AddAuthorizedAcc( account ) { 
-    const tx2 = await multiBank.connect(accOwner).addAuthorized( account.address );
-    await tx2.wait();
-  }
-
-  async function SetContractBalance( balance ) {
-    const tx = await bankToken.connect(accOwner).transfer(multiBank.address, balance);
-    await tx.wait();
-  };
-
-  async function SetAccountBalance( account, balance ) {
-    const tx = await bankToken.connect(accOwner).transfer(account.address, balance);
-    await tx.wait();
-  };
-
-  async function ClaimValue( account, value ) {
-    const tx = await multiBank.connect(account).claim( value );
+    const tx = await multiBank.connect(accOwner).addAuthorized( account.address );
     await tx.wait();
   }
-
-  async function DepositValue( account, value ) {
-    const tx = await multiBank.connect(account).deposit(value);
-      await tx.wait();
-  }
-
-  async function ClaimedValue( account, value ) {
-    const balanceBefore = await multiBank.currentBalance();
-    const accAuthorizedTokenBalanceBefore = await bankToken.balanceOf(account.address);
-
-    
-
-    const balanceAfter = await multiBank.currentBalance();
-    expect(balanceAfter).to.eq( balanceBefore - value );
-
-    const accAuthorizedBalance = await bankToken.balanceOf(accAuthorized.address);
-    expect(accAuthorizedBalance).to.eq( accAuthorizedTokenBalanceBefore.toNumber() + value );
-  };
-
-  async function SetApproveToDeposit( account, value ) {
-    // let allowance = await bankToken.allowance(accAuthorized.address, multiBank.address);
-    // expect(allowance).to.eq(0);
-    
-    const txApprove = await bankToken.connect(account).approve( multiBank.address, value );
-    await txApprove.wait();
-
-    const allowance = await bankToken.allowance(account.address, multiBank.address);
-    expect(allowance).to.eq( value );
-  };
 
   describe("Basic", async function () {
     beforeEach(async function() {
@@ -336,37 +291,66 @@ describe("Faucet", function () {
 });
   
 
-  describe("Claim", function () {
 
-    const contractBalanceDefult = 3000;
-    const claimValueDefult = 400;
+async function SetContractBalance( balance ) {
+  const tx = await bankToken.connect(accOwner).transfer(multiBank.address, balance);
+  await tx.wait();
+};
+
+async function SetAccountBalance( account, balance ) {
+  const tx = await bankToken.connect(accOwner).transfer(account.address, balance);
+  await tx.wait();
+};
+
+async function ClaimValue( account, value ) {
+  const tx = await multiBank.connect(account).claim( value );
+  await tx.wait();
+}
+
+async function DepositValue( account, value ) {
+  const tx = await multiBank.connect(account).deposit(value);
+  await tx.wait();
+}
+
+async function SetApproveToDeposit( account, value ) {  
+  const tx = await bankToken.connect(account).approve( multiBank.address, value );
+  await tx.wait();
+};
+
+async function ApproveAndDepositValue( account, value ) {
+  await SetApproveToDeposit( account, value );
+  await DepositValue( account, value );
+}
+
+  describe("Claim Simple", function () {
+
+    const contractTokenBalanceDefult = 3000;
 
     beforeEach(async function(){
       await InitContracts();
-      await SetContractBalance(contractBalanceDefult);
+      await SetContractBalance(contractTokenBalanceDefult);
       await AddAuthorizedAcc(accAuthorized);
     });
 
     it("Failed not enough balance on contract", async function() {
       await expect(
-        multiBank.connect(accAuthorized).claim( contractBalanceDefult + 100 )
+        multiBank.connect(accAuthorized).claim( contractTokenBalanceDefult + 100 )
       ).to.be.revertedWith("balance is low");
     });
 
     it("Failed by not Authorized user", async function() {
       await expect(
-        multiBank.connect(accGuest).claim(claimValueDefult)
+        multiBank.connect(accGuest).claim( 10 )
       ).to.be.revertedWith("not Authorized!");
     });
 
-    it("Succes with zero deposit", async function() {
+    it("Succes first time Claim with zero Debet", async function() {
 
-      const value = claimValueDefult
+      const value = 400;
       const balanceBefore = await multiBank.currentBalance();
       const accAuthorizedTokenBalanceBefore = await bankToken.balanceOf(accAuthorized.address);
 
-      const tx = await multiBank.connect(accAuthorized).claim( value );
-      await tx.wait();
+      await ClaimValue( accAuthorized, value );
 
       const balanceAfter = await multiBank.currentBalance();
       expect(balanceAfter).to.eq( balanceBefore - value );
@@ -377,11 +361,10 @@ describe("Faucet", function () {
 
   });
 
-  describe("Deposits", async function() {
+  describe("Deposit Simple", async function() {
 
     const initBalance = 3000;
     const accountInitBalance = 500
-    const claimValue = 400;
     const depositApproveValue = 200
 
     beforeEach(async function(){
@@ -389,20 +372,15 @@ describe("Faucet", function () {
       await SetContractBalance( initBalance );
       await SetAccountBalance( accAuthorized, accountInitBalance  );
       await AddAuthorizedAcc( accAuthorized );
-      await ClaimedValue( accAuthorized, claimValue );
       await SetApproveToDeposit( accAuthorized, depositApproveValue );
     });
-
-    async function depositSuccesTest( claim, deposit, creditResult, debetResult ) {
-
-    }
 
     it("Failed no allowance Deposit", async function() {
       let allowance = await bankToken.allowance(accAuthorized.address, multiBank.address);
       expect(allowance).to.not.equal(0);
 
       await expect(
-        multiBank.connect(accAuthorized).deposit( allowance.toNumber() + 600 )
+        multiBank.connect(accAuthorized).deposit( allowance.toNumber() + 100 )
       ).to.be.revertedWith("ERC20: insufficient allowance");
     });
 
@@ -411,40 +389,191 @@ describe("Faucet", function () {
 
       const valueToClaim = accBalance.toNumber() + 500
 
-      const txApprove = await bankToken.connect(accAuthorized).approve( multiBank.address, valueToClaim );
-      await txApprove.wait();
+      await SetApproveToDeposit( accAuthorized, valueToClaim );
 
       await expect(
         multiBank.connect(accAuthorized).deposit( valueToClaim )
       ).to.be.revertedWith("balance is low")
     });
 
-    it("Success", async function() {
+    it("Success first time Deposit with zero Credit", async function() {
       const depositValue = 200;
 
-      let contractBalanceBefore = await multiBank.currentBalance();
-      let accAuthorizedBalanceBefore = await bankToken.balanceOf(accAuthorized.address);
+      const contractBalanceBefore = await multiBank.currentBalance();
+      const accAuthorizedBalanceBefore = await bankToken.balanceOf(accAuthorized.address);
 
-      let  debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      const  debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
       expect(debetBalanceBefore).to.eq(0);
-      let creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
-      expect(creditBalanceBefore).to.eq( claimValue );
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq(0);
 
-      const txDeposit = await multiBank.connect(accAuthorized).deposit(depositValue);
-      await txDeposit.wait();
+      await ApproveAndDepositValue( accAuthorized, depositValue );
 
-      let contractBalanceAfter = await multiBank.currentBalance();
+      const contractBalanceAfter = await multiBank.currentBalance();
       expect(contractBalanceAfter).to.eq( contractBalanceBefore.toNumber() + depositValue );
 
-      let accAuthorizedBalanceAfter = await bankToken.balanceOf(accAuthorized.address);
+      const accAuthorizedBalanceAfter = await bankToken.balanceOf(accAuthorized.address);
       expect(accAuthorizedBalanceAfter).to.eq( accAuthorizedBalanceBefore.toNumber() - depositValue);
 
-      let debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
-      expect(debetBalanceAfter).to.eq( depositValue > creditBalanceBefore.toNumber() ? depositValue - creditBalanceBefore.toNumber() : 0 );
-
-      let creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
-      expect(creditBalanceAfter).to.eq( creditBalanceBefore.toNumber() > depositValue ? creditBalanceBefore.toNumber() - depositValue : 0);
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq(0);
     });
 
   });
+
+
+  describe("Deposit after Claim", async function() {
+    const initBalance = 3000;
+    const initAccountBalance = 1000
+
+    beforeEach(async function(){
+      await InitContracts();
+      await SetContractBalance( initBalance );
+      await SetAccountBalance( accAuthorized, initAccountBalance  );
+      await AddAuthorizedAcc( accAuthorized );
+      await SetApproveToDeposit( accAuthorized, initBalance + initAccountBalance);
+    });
+
+    it("Success same Deposit", async function() {
+
+      const claimValue = 400;
+      const depositValue = 400;
+
+      const debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceBefore).to.eq( 0 );
+
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq( 0 );
+
+      await ClaimValue( accAuthorized, claimValue );
+      await ApproveAndDepositValue( accAuthorized, depositValue );
+
+      const debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceAfter).to.eq( 0 );
+
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq( 0 );
+    });
+
+    it("Success less Deposit", async function() {
+
+      const claimValue = 400;
+      const depositValue = 200;
+
+      const debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceBefore).to.eq( 0 );
+
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq( 0 );
+
+      await ClaimValue( accAuthorized, claimValue );
+      await ApproveAndDepositValue( accAuthorized, depositValue );
+
+      const debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceAfter).to.eq( 0 );
+
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq( claimValue - depositValue );
+    });
+
+    it("Success bigger Deposit", async function() {
+
+      const claimValue = 200;
+      const depositValue = 400;
+
+      const debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceBefore).to.eq( 0 );
+
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq( 0 );
+
+      await ClaimValue( accAuthorized, claimValue );
+      await ApproveAndDepositValue( accAuthorized, depositValue );
+
+      const debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceAfter).to.eq( depositValue - claimValue );
+
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq( 0 );
+    });
+  });
+
+  describe("Claim after Deposit", async function() {
+
+    const initBalance = 3000;
+    const initAccountBalance = 1000
+
+    beforeEach(async function(){
+      await InitContracts();
+      await SetContractBalance( initBalance );
+      await SetAccountBalance( accAuthorized, initAccountBalance  );
+      await AddAuthorizedAcc( accAuthorized );
+      await SetApproveToDeposit( accAuthorized, initBalance + initAccountBalance);
+    });
+
+    it("Success same Claim", async function() {
+
+      const claimValue = 400;
+      const depositValue = 400;
+
+      const debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceBefore).to.eq( 0 );
+
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq( 0 );
+
+      await ApproveAndDepositValue( accAuthorized, depositValue );
+      await ClaimValue( accAuthorized, claimValue );
+
+      const debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceAfter).to.eq( 0 );
+
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq( 0 );
+    });
+
+    it("Success less Claim", async function() {
+
+      const claimValue = 200;
+      const depositValue = 400;
+
+      const debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceBefore).to.eq( 0 );
+
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq( 0 );
+
+      await ApproveAndDepositValue( accAuthorized, depositValue );
+      await ClaimValue( accAuthorized, claimValue );
+
+      const debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceAfter).to.eq( depositValue - claimValue  );
+
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq( 0 );
+    });
+
+    it("Success bigger Claim", async function() {
+
+      const claimValue = 400;
+      const depositValue = 200;
+
+      const debetBalanceBefore = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceBefore).to.eq( 0 );
+
+      const creditBalanceBefore = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceBefore).to.eq( 0 );
+
+      await ApproveAndDepositValue( accAuthorized, depositValue );
+      await ClaimValue( accAuthorized, claimValue );
+
+      const debetBalanceAfter = await multiBank.balanceOf(accAuthorized.address, debetTokenID);
+      expect(debetBalanceAfter).to.eq( 0);
+
+      const creditBalanceAfter = await multiBank.balanceOf(accAuthorized.address, creditTokenID);
+      expect(creditBalanceAfter).to.eq( claimValue - depositValue );
+    });
+
+  });
+
 });
