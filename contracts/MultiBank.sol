@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract MultiBank is Ownable, ERC1155 {
 
     mapping(address => bool) public authorized;
-    address[] private authorized_array;
+    address[] private authorizedArray;
 
     address public faucetAddress;
     uint256 public faucetAmount; 
@@ -47,26 +47,25 @@ contract MultiBank is Ownable, ERC1155 {
     }
 
     function currentBalance() public view returns(uint){
-        if( address(bankToken) != address(0) ) {
-            return bankToken.balanceOf(address(this));
-        } else {
-            return 0;
+        if( address(bankToken) == address(0) ) {
+            return 0;   
         }
         
+        return bankToken.balanceOf(address(this));
     }
 
     function removeAuthorizedArrayElement(address addr) internal {
-        bool addr_found;
-        for (uint i = 0; i<authorized_array.length-1; i++){
-            if( !addr_found ) {
-                addr_found = authorized_array[i] == addr;
+        bool addrFound;
+        for (uint i = 0; i<authorizedArray.length-1; i++){
+            if( !addrFound ) {
+                addrFound = authorizedArray[i] == addr;
             }
 
-            if( addr_found ) {
-                authorized_array[i] = authorized_array[i+1];
+            if( addrFound ) {
+                authorizedArray[i] = authorizedArray[i+1];
             } 
         }
-        authorized_array.pop();
+        authorizedArray.pop();
     }
 
     receive() external payable {
@@ -76,7 +75,7 @@ contract MultiBank is Ownable, ERC1155 {
         require(_toAdd != address(0));
         require( !authorized[_toAdd] );
         authorized[_toAdd] = true;
-        authorized_array.push(_toAdd);
+        authorizedArray.push(_toAdd);
     }
 
     function removeAuthorized(address _toRemove) onlyOwner public {
@@ -91,7 +90,7 @@ contract MultiBank is Ownable, ERC1155 {
     }
 
     function getAddressAuthorizedArray() public view returns(address[] memory ) {
-        return authorized_array;
+        return authorizedArray;
     }
 
     function setFaucetAddress(address addr) external onlyOwner() {
@@ -138,7 +137,7 @@ contract MultiBank is Ownable, ERC1155 {
     }
 
 
-    function transferERC20( IERC20 token, address from, address to, uint256 amount) public onlyAuthorized {
+    function transferERC20( IERC20 token, address from, address to, uint256 amount) private onlyAuthorized {
         uint256 erc20balance = token.balanceOf(from);
         require(amount <= erc20balance, "balance is low");
         if( from  == address(this) ) {
