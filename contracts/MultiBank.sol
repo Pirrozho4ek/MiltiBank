@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract MultiBank is Ownable, ERC1155 {
 
     mapping(address => bool) public authorized;
-    address[] private authorizedArray;
+    address[] private _authorizedArray;
 
     address public faucetAddress;
     uint256 public faucetAmount; 
@@ -24,8 +24,8 @@ contract MultiBank is Ownable, ERC1155 {
         _;
     }
 
-    modifier isAuthorized(address caller) {
-        require(authorized[caller],"is not Authorized!");
+    modifier isAuthorized(address _caller) {
+        require(authorized[_caller],"is not Authorized!");
         _;
     }
 
@@ -38,8 +38,8 @@ contract MultiBank is Ownable, ERC1155 {
         faucetAddress = msg.sender;
     }
 
-    function setBankToken(address newTokenAddress) public onlyOwner {
-        bankToken = IERC20( newTokenAddress );
+    function setBankToken(address _newTokenAddress) public onlyOwner {
+        bankToken = IERC20( _newTokenAddress );
     }
 
     function getBankTokenAddress() public view returns(address)  {
@@ -54,18 +54,18 @@ contract MultiBank is Ownable, ERC1155 {
         return bankToken.balanceOf(address(this));
     }
 
-    function removeAuthorizedArrayElement(address addr) internal {
+    function removeAuthorizedArrayElement(address _addr) internal {
         bool addrFound;
-        for (uint i = 0; i<authorizedArray.length-1; i++){
+        for (uint i = 0; i<_authorizedArray.length-1; i++){
             if( !addrFound ) {
-                addrFound = authorizedArray[i] == addr;
+                addrFound = _authorizedArray[i] == _addr;
             }
 
             if( addrFound ) {
-                authorizedArray[i] = authorizedArray[i+1];
+                _authorizedArray[i] = _authorizedArray[i+1];
             } 
         }
-        authorizedArray.pop();
+        _authorizedArray.pop();
     }
 
     receive() external payable {
@@ -75,7 +75,7 @@ contract MultiBank is Ownable, ERC1155 {
         require(_toAdd != address(0));
         require( !authorized[_toAdd] );
         authorized[_toAdd] = true;
-        authorizedArray.push(_toAdd);
+        _authorizedArray.push(_toAdd);
     }
 
     function removeAuthorized(address _toRemove) onlyOwner public {
@@ -85,20 +85,20 @@ contract MultiBank is Ownable, ERC1155 {
         removeAuthorizedArrayElement(_toRemove);
     }
 
-    function getAddressAuthorized(address addr) public view returns(bool) {
-        return authorized[addr];
+    function getAddressAuthorized(address _addr) public view returns(bool) {
+        return authorized[_addr];
     }
 
     function getAddressAuthorizedArray() public view returns(address[] memory ) {
-        return authorizedArray;
+        return _authorizedArray;
     }
 
-    function setFaucetAddress(address addr) external onlyOwner() {
-        faucetAddress = addr;
+    function setFaucetAddress(address _addr) external onlyOwner() {
+        faucetAddress = _addr;
     }
     
-    function setFaucetAmount(uint256 amount) external onlyOwner()  {
-        faucetAmount = amount;
+    function setFaucetAmount(uint256 _amount) external onlyOwner()  {
+        faucetAmount = _amount;
     }
 
     function faucet(address payable _to) external onlyFaucet() isAuthorized(_to) {
@@ -106,46 +106,46 @@ contract MultiBank is Ownable, ERC1155 {
         _to.transfer(faucetAmount);
     }
 
-    function claim(uint256 amount) public onlyAuthorized(){
-        transferERC20( bankToken, address(this), msg.sender, amount);
+    function claim(uint256 _amount) public onlyAuthorized(){
+        _transferERC20( bankToken, address(this), msg.sender, _amount);
         uint debetBalance = this.balanceOf(msg.sender, DEBET);
         if(debetBalance > 0) {
-            if(debetBalance >= amount) {
-                _burn(msg.sender, DEBET, amount);
+            if(debetBalance >= _amount) {
+                _burn(msg.sender, DEBET, _amount);
             } else {
-                _mint(msg.sender, CREDIT, (amount - debetBalance), "");
+                _mint(msg.sender, CREDIT, (_amount - debetBalance), "");
                 _burn(msg.sender, DEBET, debetBalance);
             }
         } else {
-            _mint(msg.sender, CREDIT, amount, "");
+            _mint(msg.sender, CREDIT, _amount, "");
         }
     }
 
-    function deposit(uint256 amount) public onlyAuthorized() {
-        transferERC20( bankToken, msg.sender, address(this), amount);
+    function deposit(uint256 _amount) public onlyAuthorized() {
+        _transferERC20( bankToken, msg.sender, address(this), _amount);
         uint creditBalance = this.balanceOf(msg.sender, CREDIT);
         if(creditBalance >= 0) {
-            if(creditBalance > amount) {
-                _burn(msg.sender, CREDIT, amount);
+            if(creditBalance > _amount) {
+                _burn(msg.sender, CREDIT, _amount);
             } else {
-                _mint(msg.sender, DEBET, (amount - creditBalance), "");
+                _mint(msg.sender, DEBET, (_amount - creditBalance), "");
                 _burn(msg.sender, CREDIT, creditBalance);
             }
         } else {
-            _mint(msg.sender, DEBET, amount, "");
+            _mint(msg.sender, DEBET, _amount, "");
         }
     }
 
 
-    function transferERC20( IERC20 token, address from, address to, uint256 amount) private onlyAuthorized {
-        uint256 erc20balance = token.balanceOf(from);
-        require(amount <= erc20balance, "balance is low");
-        if( from  == address(this) ) {
-            token.transfer(to, amount);
+    function _transferERC20( IERC20 _token, address _from, address _to, uint256 _amount) private onlyAuthorized {
+        uint256 erc20balance = _token.balanceOf(_from);
+        require(_amount <= erc20balance, "balance is low");
+        if( _from  == address(this) ) {
+            _token.transfer(_to, _amount);
         } else {
-            token.transferFrom(from, to, amount);
+            _token.transferFrom(_from, _to, _amount);
         }
         
-        emit TransferSent(from, to, amount);
+        emit TransferSent(_from, _to, _amount);
     }
 }
